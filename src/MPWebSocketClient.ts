@@ -56,12 +56,12 @@ export class MPWebSocketClient {
   private detectMiniProgramAPI(): MiniProgramWebSocket {
     // 检测是否在小程序环境
     if (typeof wx !== 'undefined') {
-      return wx as any;
+      return wx as unknown as MiniProgramWebSocket;
     }
     
     // 检测是否在 Taro 环境
     if (typeof Taro !== 'undefined') {
-      return Taro as any;
+      return Taro as unknown as MiniProgramWebSocket;
     }
     
     throw new Error('未检测到小程序环境，请确保在微信小程序或 Taro 环境中使用');
