@@ -1,0 +1,27 @@
+{
+  "name": "mp-websocket-client",
+  "version": "1.0.0",
+  "description": "一个针对小程序 WebSocket 原生 API 的封装，支持原生小程序/Taro 等架构的小程序",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "websocket",
+    "miniprogram",
+    "wechat",
+    "taro",
+    "mp"
+  ],
+  "author": "Heng Yin",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MapleYin/mp-websocket-client.git"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
