@@ -1,4 +1,17 @@
-import { SocketState, SocketOptions, SocketEventHandlers, MiniProgramWebSocket } from './types';
+import { 
+  SocketState, 
+  SocketOptions, 
+  SocketEventHandlers, 
+  MiniProgramWebSocket,
+  SocketOpenResponse,
+  SocketMessageResponse,
+  SocketCloseResponse,
+  SocketErrorResponse,
+  ConnectSocketOptions,
+  SendSocketMessageOptions,
+  CloseSocketOptions,
+  SocketTask
+} from './types';
 
 /**
  * 小程序 WebSocket 客户端封装
@@ -6,13 +19,14 @@ import { SocketState, SocketOptions, SocketEventHandlers, MiniProgramWebSocket }
  */
 export class MPWebSocketClient {
   private options: Required<SocketOptions>;
-  private socketTask: any = null;
+  private socketTask: SocketTask | null = null;
   private state: SocketState = SocketState.CLOSED;
   private reconnectAttempts = 0;
   private reconnectTimer: any = null;
   private heartbeatTimer: any = null;
   private mpApi: MiniProgramWebSocket;
   private eventHandlers: SocketEventHandlers = {};
+  private shouldReconnect = true;
   
   /**
    * 创建 WebSocket 客户端实例
@@ -69,14 +83,14 @@ export class MPWebSocketClient {
     this.state = SocketState.CONNECTING;
     
     try {
-      const connectOptions: any = {
+      const connectOptions: ConnectSocketOptions = {
         url: this.options.url,
         success: () => {
           console.log('WebSocket 连接请求发送成功');
         },
         fail: (err: any) => {
           console.error('WebSocket 连接请求失败', err);
-          this.handleError(err);
+          this.handleError({ errMsg: err.errMsg || '连接失败' });
         }
       };
       
@@ -84,22 +98,25 @@ export class MPWebSocketClient {
         connectOptions.protocols = this.options.protocols;
       }
       
-      this.socketTask = this.mpApi.connectSocket(connectOptions);
+      this.socketTask = this.mpApi.connectSocket(connectOptions) as SocketTask || null;
       
       // 绑定事件监听
       this.bindEvents();
-    } catch (error) {
+    } catch (error: any) {
       console.error('WebSocket 连接异常', error);
-      this.handleError(error);
+      this.handleError({ errMsg: error.message || '连接异常' });
     }
   }
   
   /**
    * 绑定 WebSocket 事件
+   * 注意：如果使用全局事件监听（旧版本 API），多个实例会共享事件监听器。
+   * 建议使用支持 socketTask 的新版本 API。
    */
   private bindEvents(): void {
     if (!this.socketTask) {
       // 使用全局事件监听（兼容旧版本小程序 API）
+      // 注意：此模式下多个 WebSocket 实例会共享事件监听器
       this.mpApi.onSocketOpen(this.handleOpen.bind(this));
       this.mpApi.onSocketMessage(this.handleMessage.bind(this));
       this.mpApi.onSocketError(this.handleError.bind(this));
@@ -116,7 +133,7 @@ export class MPWebSocketClient {
   /**
    * 处理连接打开事件
    */
-  private handleOpen(res: any): void {
+  private handleOpen(res: SocketOpenResponse): void {
     console.log('WebSocket 连接已打开', res);
     this.state = SocketState.OPEN;
     this.reconnectAttempts = 0;
@@ -133,7 +150,7 @@ export class MPWebSocketClient {
   /**
    * 处理接收消息事件
    */
-  private handleMessage(res: any): void {
+  private handleMessage(res: SocketMessageResponse): void {
     // 触发用户回调
     this.eventHandlers.onMessage?.(res);
   }
@@ -141,7 +158,7 @@ export class MPWebSocketClient {
   /**
    * 处理连接关闭事件
    */
-  private handleClose(res: any): void {
+  private handleClose(res: SocketCloseResponse): void {
     console.log('WebSocket 连接已关闭', res);
     this.state = SocketState.CLOSED;
     
@@ -152,7 +169,7 @@ export class MPWebSocketClient {
     this.eventHandlers.onClose?.(res);
     
     // 尝试重连
-    if (this.options.autoReconnect) {
+    if (this.options.autoReconnect && this.shouldReconnect) {
       this.tryReconnect();
     }
   }
@@ -160,7 +177,7 @@ export class MPWebSocketClient {
   /**
    * 处理连接错误事件
    */
-  private handleError(res: any): void {
+  private handleError(res: SocketErrorResponse): void {
     console.error('WebSocket 连接错误', res);
     
     // 触发用户回调
@@ -177,7 +194,7 @@ export class MPWebSocketClient {
         return;
       }
       
-      const sendOptions: any = {
+      const sendOptions: SendSocketMessageOptions = {
         data,
         success: () => {
           resolve();
@@ -204,13 +221,13 @@ export class MPWebSocketClient {
     }
     
     this.state = SocketState.CLOSING;
-    this.options.autoReconnect = false; // 主动关闭时禁用自动重连
+    this.shouldReconnect = false; // 主动关闭时禁用自动重连
     
     // 停止心跳和重连定时器
     this.stopHeartbeat();
     this.stopReconnect();
     
-    const closeOptions: any = {
+    const closeOptions: CloseSocketOptions = {
       code: code || 1000,
       reason: reason || 'Normal closure',
       success: () => {
@@ -232,7 +249,7 @@ export class MPWebSocketClient {
    * 尝试重连
    */
   private tryReconnect(): void {
-    if (!this.options.autoReconnect) {
+    if (!this.options.autoReconnect || !this.shouldReconnect) {
       return;
     }
     
